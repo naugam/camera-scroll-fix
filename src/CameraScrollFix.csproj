@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>CameraScrollFix</AssemblyName>
+    <Nullable>enable</Nullable>
+    <LangVersion>10.0</LangVersion>
+    <Version>1.0.3</Version>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="BepInEx"><HintPath>../references/BepInEx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="HOOKS-Assembly-CSharp"><HintPath>../references/HOOKS-Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="PUBLIC-Assembly-CSharp"><HintPath>../references/PUBLIC-Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MonoMod.RuntimeDetour"><HintPath>../references/MonoMod.RuntimeDetour.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MonoMod.Utils"><HintPath>../references/MonoMod.Utils.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>../references/UnityEngine.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>../references/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.ImageConversionModule"><HintPath>../references/UnityEngine.ImageConversionModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="SBCameraScroll"><HintPath>../references/SBCameraScroll.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <Target Name="CopyToPlugins" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="../CameraScrollFix/plugins" />
+  </Target>
+</Project>

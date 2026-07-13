@@ -1,0 +1,7 @@
+references/
+CameraScrollFix/
+bin/
+obj/
+src/bin/
+src/obj/
+*.user
