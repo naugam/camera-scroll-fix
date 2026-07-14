@@ -8,6 +8,7 @@ using BepInEx.Logging;
 using UnityEngine;
 using MonoMod.RuntimeDetour;
 using SBCameraScroll;
+using RWCustom;
 
 #pragma warning disable CS0618
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -125,12 +126,52 @@ public class FlatMod : BaseUnityPlugin
             return false;
         }
 
+        float shortcutScore = CheckFlatTextureShortcutAlignments(rc, flat);
+        if (shortcutScore != 1) //unexpected score
+        {
+            Log.LogInfo($"{PLUGIN_NAME}: shortcut score for {room_name} is {shortcutScore}.");
+            if (shortcutScore < 0.5f)
+            {
+                Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name}.");
+                return false;
+            }
+        }
+
         RenderTexture rt = rc.Render_Texture();
         if (!Util.Util_UpdateRenderTexture(rt, rect)) return false;
 
         Graphics.CopyTexture(flat, rt);
         active_room[cam] = fn;
         return true;
+    }
+
+    private static float CheckFlatTextureShortcutAlignments(RoomCamera rc, Texture2D flat)
+    {
+        Room room = rc.loadingRoom ?? rc.room;
+        Vector2 minCameraPosition = room.abstractRoom.GetFields().min_camera_position;
+        IntVector2 cameraOffset = new(Mathf.RoundToInt(minCameraPosition.x), Mathf.RoundToInt(minCameraPosition.y));
+
+        int successes = 0;
+        int tests = 0;
+        foreach (ShortcutData sc in room.shortcuts)
+        {
+            try
+            {
+                foreach (IntVector2 pos in sc.path)
+                {
+                    tests++;
+                    //check the middle of this shortcut for the shortcut cutout color
+                    IntVector2 samplePos = pos * 20 + new IntVector2(10, 10) - cameraOffset; //middle of tile
+                    Color col = flat.GetPixel(samplePos.x, samplePos.y);
+                    //the 3rd green bit should be 1, and the blue value should be 0
+                    if ((Mathf.RoundToInt(col.g * 255) & 8) == 8 && col.b == 0)
+                        successes++;
+                }
+            }
+            catch (Exception ex) { Log.LogError(ex); }
+        }
+
+        return (float)successes / (float)tests;
     }
 
     private static bool TryGetFlat(RoomCamera rc, out Texture2D flat, out Vector2 min)
