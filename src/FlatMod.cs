@@ -22,7 +22,7 @@ public class FlatMod : BaseUnityPlugin
 {
     public const string PLUGIN_GUID = "naugam.camera_scroll_fix";
     public const string PLUGIN_NAME = "Camera Scroll Fix";
-    public const string PLUGIN_VERSION = "1.0.3";
+    public const string PLUGIN_VERSION = "1.0.4";
 
     private const bool FLIP_Y = false;
 
@@ -130,9 +130,9 @@ public class FlatMod : BaseUnityPlugin
         if (shortcutScore != 1) //unexpected score
         {
             Log.LogInfo($"{PLUGIN_NAME}: shortcut score for {room_name} is {shortcutScore}.");
-            if (shortcutScore < 0.5f)
+            if (shortcutScore < 0.8f)
             {
-                Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name}.");
+                Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name} due to shortcut mismatches.");
                 return false;
             }
         }
@@ -157,14 +157,17 @@ public class FlatMod : BaseUnityPlugin
         {
             try
             {
-                foreach (IntVector2 pos in sc.path)
+                //check every other foreground tile for the shortcut graphic
+                for (int i = 1; i < sc.path.Length - 2; i += 2) //don't include first 1 or last 2 in path
                 {
+                    if (room.GetTile(sc.path[i]).Terrain == Room.Tile.TerrainType.Air)
+                        continue; //don't bother checking background tiles; they're less reliable
                     tests++;
                     //check the middle of this shortcut for the shortcut cutout color
-                    IntVector2 samplePos = pos * 20 + new IntVector2(10, 10) - cameraOffset; //middle of tile
-                    Color col = flat.GetPixel(samplePos.x, samplePos.y);
+                    IntVector2 samplePos = (sc.path[i] * 20) + new IntVector2(12, 8) - cameraOffset; //middle of tile...ish
+                    Color col = ReadFlat(flat, samplePos);
                     //the 3rd green bit should be 1, and the blue value should be 0
-                    if ((Mathf.RoundToInt(col.g * 255) & 8) == 8 && col.b == 0)
+                    if ((Mathf.FloorToInt(col.g * 255) & 8) == 8 && col.b == 0)
                         successes++;
                 }
             }
@@ -187,13 +190,13 @@ public class FlatMod : BaseUnityPlugin
         return true;
     }
 
-    private static Color ReadFlat(Texture2D flat, Vector2 local)
+    private static Color ReadFlat(Texture2D flat, IntVector2 local)
     {
-        int x = Mathf.FloorToInt(local.x);
-        int y = Mathf.FloorToInt(local.y);
-        if (FLIP_Y) y = flat.height - 1 - y;
-        return flat.GetPixel(x, y);
+        if (FLIP_Y) local.y = flat.height - 1 - local.y;
+        return flat.GetPixel(local.x, local.y);
     }
+    private static Color ReadFlat(Texture2D flat, Vector2 local)
+        => ReadFlat(flat, new IntVector2(Mathf.FloorToInt(local.x), Mathf.FloorToInt(local.y)));
 
     private static Color RoomCamera_PixelColorAtCoordinate(
         On.RoomCamera.orig_PixelColorAtCoordinate orig, RoomCamera rc, Vector2 position)
