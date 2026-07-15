@@ -36,7 +36,10 @@ public class FlatMod : BaseUnityPlugin
 
     private static readonly HashSet<string> blacklist =
         new(StringComparer.OrdinalIgnoreCase) { "GW_TOWER01", "SL_ROOF04", "UG_B06", "UW_PREGATE", "LF_D09", "DS_C04", "LC_dome", "LC_FINAL", "GW_ARTYNIGHTMARE", "GW_ARTYSCENES", "MS_HEART", "MS_bitteraerie1" };
-
+    //shortcut+pole-check didn't get: LF_D09, LC_dome, LC_FINAL, MS_HEART - so these still need to be manually blacklisted.
+    //pole-check got GW_C04 and DS_C04 and MS_bitteraerie1.
+    //shortcut-check got HI_C05 and basically everything else.
+    //ARTYNIGHTMARE and ARTYSCENES should be blacklisted already by SBCameraScroll.
     private static readonly HashSet<string> logged_names =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -92,7 +95,7 @@ public class FlatMod : BaseUnityPlugin
         if (logged_names.Add(an))
             Log.LogInfo($"{PLUGIN_NAME}: room name='{an}' file='{fn}'");
 
-        if (blacklist.Contains(an) || blacklist.Contains(fn))
+        if (blacklist.Contains(an) || blacklist.Contains(fn) || rc.IsRoomBlacklisted(room.abstractRoom))
         {
             Log.LogInfo($"{PLUGIN_NAME}: '{an}' blacklisted -> stitched screens.");
             return false;
@@ -130,9 +133,20 @@ public class FlatMod : BaseUnityPlugin
         if (shortcutScore != 1) //unexpected score
         {
             Log.LogInfo($"{PLUGIN_NAME}: shortcut score for {room_name} is {shortcutScore}.");
-            if (shortcutScore < 0.8f)
+            if (shortcutScore < 0.9f)
             {
                 Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name} due to shortcut mismatches.");
+                return false;
+            }
+        }
+
+        float poleScore = CheckFlatTexturePoleAlignments(rc, flat);
+        if (poleScore != 1) //unexpected score
+        {
+            Log.LogInfo($"{PLUGIN_NAME}: pole score for {room_name} is {poleScore}.");
+            if (poleScore < 0.95f) //much stricter threshold
+            {
+                Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name} due to pole mismatches.");
                 return false;
             }
         }
@@ -145,7 +159,7 @@ public class FlatMod : BaseUnityPlugin
         return true;
     }
 
-    private static float CheckFlatTextureShortcutAlignments(RoomCamera rc, Texture2D flat)
+    private static float CheckFlatTextureShortcutAlignments(RoomCamera rc, Texture2D flat, int stepSize = 2)
     {
         Room room = rc.loadingRoom ?? rc.room;
         Vector2 minCameraPosition = room.abstractRoom.GetFields().min_camera_position;
@@ -158,7 +172,7 @@ public class FlatMod : BaseUnityPlugin
             try
             {
                 //check every other foreground tile for the shortcut graphic
-                for (int i = 1; i < sc.path.Length - 2; i += 2) //don't include first 1 or last 2 in path
+                for (int i = 1; i < sc.path.Length - 2; i += stepSize) //don't include first 1 or last 2 in path
                 {
                     if (room.GetTile(sc.path[i]).Terrain == Room.Tile.TerrainType.Air)
                         continue; //don't bother checking background tiles; they're less reliable
@@ -172,6 +186,39 @@ public class FlatMod : BaseUnityPlugin
                 }
             }
             catch (Exception ex) { Log.LogError(ex); }
+        }
+
+        return (float)successes / (float)tests;
+    }
+
+    private static float CheckFlatTexturePoleAlignments(RoomCamera rc, Texture2D flat, int stepSize = 2)
+    {
+        Room room = rc.loadingRoom ?? rc.room;
+        Vector2 minCameraPosition = room.abstractRoom.GetFields().min_camera_position;
+        IntVector2 cameraOffset = new(Mathf.RoundToInt(minCameraPosition.x), Mathf.RoundToInt(minCameraPosition.y));
+
+        int successes = 0;
+        int tests = 0;
+        for (int x = 0, yStart = 0; x < room.TileWidth; x++)
+        {
+            for (int y = yStart; y < room.TileHeight; y += stepSize)
+            {
+                try
+                {
+                    if (!room.Tiles[x, y].AnyBeam)
+                        continue; //doesn't have a pole
+                    tests++;
+                    //check the middle of this tile for its depth
+                    IntVector2 samplePos = new IntVector2(x*20 + 10, y*20 + 10) - cameraOffset; //middle of tile
+                    Color col = ReadFlat(flat, samplePos);
+                    int red = Mathf.FloorToInt(col.r * 255);
+                    int depth = (red % 30) - 1;
+                    if (depth <= 4)
+                        successes++;
+                }
+                catch (Exception ex) { Log.LogError(ex); }
+            }
+            yStart = (yStart + 1) % stepSize; //checkerboard like pattern or something
         }
 
         return (float)successes / (float)tests;
