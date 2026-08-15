@@ -36,7 +36,7 @@ public class FlatMod : BaseUnityPlugin
     private static readonly Dictionary<int, string> active_room = new();
 
     private static readonly HashSet<string> blacklist =
-        new(StringComparer.OrdinalIgnoreCase) { "GW_TOWER01", "SL_ROOF04", "UG_B06", "UW_PREGATE", "DS_C04", "LC_dome", "LC_FINAL", "GW_ARTYNIGHTMARE", "GW_ARTYSCENES", "MS_HEART", "MS_bitteraerie1" };
+        new(StringComparer.OrdinalIgnoreCase) { "LC_dome", "LC_FINAL", "GW_ARTYNIGHTMARE", "GW_ARTYSCENES", "MS_HEART" };
     //shortcut+pole-check didn't get: LF_D09, LC_dome, LC_FINAL, MS_HEART - so these still need to be manually blacklisted.
     //pole-check got GW_C04 and DS_C04 and MS_bitteraerie1.
     //shortcut-check got HI_C05 and basically everything else.
