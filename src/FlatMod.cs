@@ -69,9 +69,27 @@ public class FlatMod : BaseUnityPlugin
             On.RoomCamera.LitAtCoordinate        += RoomCamera_LitAtCoordinate;
             On.RoomCamera.DepthAtCoordinate      += RoomCamera_DepthAtCoordinate;
 
+            ReplaceLevelColorShader();
+
             Log.LogInfo($"{PLUGIN_NAME}: hooks applied.");
         }
         catch (Exception e) { Log.LogError($"{PLUGIN_NAME}: hook failed. {e}"); }
+    }
+
+    private void ReplaceLevelColorShader()
+    {
+        AssetBundle bundle = AssetBundle.LoadFromFile(AssetManager.ResolveFilePath(Path.Combine("AssetBundles", "CameraScrollFix.assets")));
+        Shader levelColor = bundle.LoadAsset<Shader>("LevelColor.shader");
+        if (levelColor == null)
+            Log.LogError("Could not find LevelColor.shader");
+        else
+        {
+            FShader fShader = FShader._shaders.Find(f => f.name == "SBCameraScroll/LevelColor");
+            if (fShader == null)
+                Log.LogError("Could not find LevelColor FShader");
+            else
+                fShader.shader = levelColor;
+        }
     }
 
     public static void LoadTexHook(Action<RoomCamera> orig, RoomCamera rc)
