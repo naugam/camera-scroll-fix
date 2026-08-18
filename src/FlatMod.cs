@@ -1,14 +1,15 @@
+using BepInEx;
+using BepInEx.Logging;
+using MonoMod.RuntimeDetour;
+using RWCustom;
+using SBCameraScroll;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Security.Permissions;
-using BepInEx;
-using BepInEx.Logging;
 using UnityEngine;
-using MonoMod.RuntimeDetour;
-using SBCameraScroll;
-using RWCustom;
+using static SBCameraScroll.AbstractRoomMod;
 
 #pragma warning disable CS0618
 [assembly: SecurityPermission(SecurityAction.RequestMinimum, SkipVerification = true)]
@@ -22,7 +23,7 @@ public class FlatMod : BaseUnityPlugin
 {
     public const string PLUGIN_GUID = "naugam.camera_scroll_fix";
     public const string PLUGIN_NAME = "Camera Scroll Fix";
-    public const string PLUGIN_VERSION = "1.0.4";
+    public const string PLUGIN_VERSION = "1.0.5";
 
     private const bool FLIP_Y = false;
 
@@ -35,7 +36,7 @@ public class FlatMod : BaseUnityPlugin
     private static readonly Dictionary<int, string> active_room = new();
 
     private static readonly HashSet<string> blacklist =
-        new(StringComparer.OrdinalIgnoreCase) { "GW_TOWER01", "SL_ROOF04", "UG_B06", "UW_PREGATE", "LF_D09", "DS_C04", "LC_dome", "LC_FINAL", "GW_ARTYNIGHTMARE", "GW_ARTYSCENES", "MS_HEART", "MS_bitteraerie1" };
+        new(StringComparer.OrdinalIgnoreCase) { "LC_dome", "LC_FINAL", "GW_ARTYNIGHTMARE", "GW_ARTYSCENES", "MS_HEART" };
     //shortcut+pole-check didn't get: LF_D09, LC_dome, LC_FINAL, MS_HEART - so these still need to be manually blacklisted.
     //pole-check got GW_C04 and DS_C04 and MS_bitteraerie1.
     //shortcut-check got HI_C05 and basically everything else.
@@ -62,13 +63,33 @@ public class FlatMod : BaseUnityPlugin
             _ = new Hook(target,
                 typeof(FlatMod).GetMethod(nameof(LoadTexHook), BindingFlags.Public | BindingFlags.Static));
 
+            On.RoomCamera.ApplyPositionChange += RoomCamera_ApplyPositionChange;
+
             On.RoomCamera.PixelColorAtCoordinate += RoomCamera_PixelColorAtCoordinate;
             On.RoomCamera.LitAtCoordinate        += RoomCamera_LitAtCoordinate;
             On.RoomCamera.DepthAtCoordinate      += RoomCamera_DepthAtCoordinate;
 
+            ReplaceLevelColorShader();
+
             Log.LogInfo($"{PLUGIN_NAME}: hooks applied.");
         }
         catch (Exception e) { Log.LogError($"{PLUGIN_NAME}: hook failed. {e}"); }
+    }
+
+    private void ReplaceLevelColorShader()
+    {
+        AssetBundle bundle = AssetBundle.LoadFromFile(AssetManager.ResolveFilePath(Path.Combine("AssetBundles", "CameraScrollFix.assets")));
+        Shader levelColor = bundle.LoadAsset<Shader>("LevelColor.shader");
+        if (levelColor == null)
+            Log.LogError("Could not find LevelColor.shader");
+        else
+        {
+            FShader fShader = FShader._shaders.Find(f => f.name == "SBCameraScroll/LevelColor");
+            if (fShader == null)
+                Log.LogError("Could not find LevelColor FShader");
+            else
+                fShader.shader = levelColor;
+        }
     }
 
     public static void LoadTexHook(Action<RoomCamera> orig, RoomCamera rc)
@@ -133,7 +154,7 @@ public class FlatMod : BaseUnityPlugin
         if (shortcutScore != 1) //unexpected score
         {
             Log.LogInfo($"{PLUGIN_NAME}: shortcut score for {room_name} is {shortcutScore}.");
-            if (shortcutScore < 0.9f)
+            if (shortcutScore < 0.95f)
             {
                 Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name} due to shortcut mismatches.");
                 return false;
@@ -144,7 +165,7 @@ public class FlatMod : BaseUnityPlugin
         if (poleScore != 1) //unexpected score
         {
             Log.LogInfo($"{PLUGIN_NAME}: pole score for {room_name} is {poleScore}.");
-            if (poleScore < 0.95f) //much stricter threshold
+            if (poleScore < 0.98f) //much stricter threshold
             {
                 Log.LogInfo($"{PLUGIN_NAME}: falling back to stitched screens for {room_name} due to pole mismatches.");
                 return false;
@@ -244,6 +265,31 @@ public class FlatMod : BaseUnityPlugin
     }
     private static Color ReadFlat(Texture2D flat, Vector2 local)
         => ReadFlat(flat, new IntVector2(Mathf.FloorToInt(local.x), Mathf.FloorToInt(local.y)));
+
+    private static void RoomCamera_ApplyPositionChange(On.RoomCamera.orig_ApplyPositionChange orig, RoomCamera rc)
+    {
+        orig(rc);
+
+        try
+        {
+            if (rc.room == null)
+                return;
+            if (!TryGetFlat(rc, out _, out _))
+                return; //not a flat texture
+
+            //tell SBCameraScroll that the decal color data is at the top left, where it should be
+
+            var room_fields = rc.room.abstractRoom.GetFields();
+            Vector2 min_camera_position = room_fields.min_camera_position;
+            Vector4[] texture_offset_array = new Vector4[30];
+
+            texture_offset_array[0] = new(0, room_fields.total_height - 800, 0, 0);
+
+            Shader.SetGlobalInt(SBCameraScroll.MainMod.TextureOffsetArrayLength, 1);
+            Shader.SetGlobalVectorArray(SBCameraScroll.MainMod.TextureOffsetArray, texture_offset_array);
+        }
+        catch (Exception ex) { Log.LogError(ex); }
+    }
 
     private static Color RoomCamera_PixelColorAtCoordinate(
         On.RoomCamera.orig_PixelColorAtCoordinate orig, RoomCamera rc, Vector2 position)
